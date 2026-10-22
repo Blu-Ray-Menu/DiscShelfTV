@@ -22,7 +22,7 @@ struct MediaItem: Decodable, Identifiable, Hashable {
     let ProductionYear: Int?
     let Overview: String?
     let RunTimeTicks: Int64?
-    let Type: String?
+    let `Type`: String?
     let ImageTags: [String: String]?
 
     var id: String { Id }
