@@ -1,0 +1,52 @@
+name: Build DiscShelf TV
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for Apple TV Simulator
+        run: |
+          xcodebuild \
+            -project DiscShelfTV.xcodeproj \
+            -scheme DiscShelfTV \
+            -sdk appletvsimulator \
+            -destination 'generic/platform=tvOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package simulator app
+        if: success()
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/Build/Products/Debug-appletvsimulator/DiscShelfTV.app \
+            DiscShelfTV-Simulator.zip
+
+      - name: Upload simulator build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscShelfTV-Simulator
+          path: DiscShelfTV-Simulator.zip
+          if-no-files-found: error
+          retention-days: 7
