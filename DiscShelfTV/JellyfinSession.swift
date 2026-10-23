@@ -1,4 +1,3 @@
-
 import Foundation
 import SwiftUI
 
@@ -22,16 +21,15 @@ final class JellyfinSession: ObservableObject {
     }
 
     private var baseURL: URL? {
-        let trimmed = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = serverURL.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+
         let normalized = trimmed.hasSuffix("/")
             ? String(trimmed.dropLast())
             : trimmed
-        return URL(string: normalized)
-    }
 
-    private var authorizationHeader: String? {
-        guard let accessToken else { return nil }
-        return "MediaBrowser Token=\"\(accessToken)\""
+        return URL(string: normalized)
     }
 
     func signIn() async {
@@ -48,21 +46,33 @@ final class JellyfinSession: ObservableObject {
         }
 
         var request = URLRequest(
-            url: baseURL.appendingPathComponent("Users/AuthenticateByName")
+            url: baseURL.appendingPathComponent(
+                "Users/AuthenticateByName"
+            )
         )
+
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        request.setValue(
+            "application/json",
+            forHTTPHeaderField: "Content-Type"
+        )
+
         request.setValue(
             "MediaBrowser Client=\"\(appName)\", Device=\"Apple TV\", DeviceId=\"\(deviceID)\", Version=\"\(appVersion)\"",
             forHTTPHeaderField: "Authorization"
         )
-        request.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "Username": username,
-            "Pw": password
-        ])
+
+        request.httpBody = try? JSONSerialization.data(
+            withJSONObject: [
+                "Username": username,
+                "Pw": password
+            ]
+        )
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) =
+                try await URLSession.shared.data(for: request)
 
             guard let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode) else {
@@ -71,7 +81,11 @@ final class JellyfinSession: ObservableObject {
                 )
             }
 
-            let auth = try JSONDecoder().decode(AuthResponse.self, from: data)
+            let auth = try JSONDecoder().decode(
+                AuthResponse.self,
+                from: data
+            )
+
             accessToken = auth.AccessToken
             userID = auth.User.Id
             password = ""
@@ -90,28 +104,55 @@ final class JellyfinSession: ObservableObject {
     }
 
     func loadMovies() async {
-        guard let baseURL, let accessToken, let userID else { return }
+        guard let baseURL,
+              let accessToken,
+              let userID else {
+            return
+        }
 
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+        }
+
         errorMessage = nil
 
         var components = URLComponents(
-            url: baseURL.appendingPathComponent("Users/\(userID)/Items"),
+            url: baseURL.appendingPathComponent(
+                "Users/\(userID)/Items"
+            ),
             resolvingAgainstBaseURL: false
         )
 
         components?.queryItems = [
-            URLQueryItem(name: "IncludeItemTypes", value: "Movie"),
-            URLQueryItem(name: "Recursive", value: "true"),
-            URLQueryItem(name: "SortBy", value: "SortName"),
-            URLQueryItem(name: "SortOrder", value: "Ascending"),
+            URLQueryItem(
+                name: "IncludeItemTypes",
+                value: "Movie"
+            ),
+            URLQueryItem(
+                name: "Recursive",
+                value: "true"
+            ),
+            URLQueryItem(
+                name: "SortBy",
+                value: "SortName"
+            ),
+            URLQueryItem(
+                name: "SortOrder",
+                value: "Ascending"
+            ),
             URLQueryItem(
                 name: "Fields",
                 value: "Overview,ProductionYear,RunTimeTicks,MediaSources"
             ),
-            URLQueryItem(name: "ImageTypeLimit", value: "1"),
-            URLQueryItem(name: "Limit", value: "500")
+            URLQueryItem(
+                name: "ImageTypeLimit",
+                value: "1"
+            ),
+            URLQueryItem(
+                name: "Limit",
+                value: "500"
+            )
         ]
 
         guard let url = components?.url else {
@@ -120,27 +161,35 @@ final class JellyfinSession: ObservableObject {
         }
 
         var request = URLRequest(url: url)
+
         request.setValue(
             "MediaBrowser Token=\"\(accessToken)\"",
             forHTTPHeaderField: "Authorization"
         )
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) =
+                try await URLSession.shared.data(for: request)
 
             guard let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode) else {
-                throw APIError.server("Could not load movies from Jellyfin.")
+                throw APIError.server(
+                    "Could not load movies from Jellyfin."
+                )
             }
 
-            movies = try JSONDecoder().decode(ItemsResponse.self, from: data).Items
+            movies = try JSONDecoder().decode(
+                ItemsResponse.self,
+                from: data
+            ).Items
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     func imageURL(for item: MediaItem) -> URL? {
-        guard let baseURL, let tag = item.ImageTags?["Primary"] else {
+        guard let baseURL,
+              let tag = item.ImageTags?["Primary"] else {
             return nil
         }
 
@@ -152,35 +201,32 @@ final class JellyfinSession: ObservableObject {
         )
 
         components?.queryItems = [
-            URLQueryItem(name: "tag", value: tag),
-            URLQueryItem(name: "maxWidth", value: "600")
+            URLQueryItem(
+                name: "tag",
+                value: tag
+            ),
+            URLQueryItem(
+                name: "maxWidth",
+                value: "600"
+            )
         ]
 
         return components?.url
     }
 
-    /// Requests Jellyfin's playback options instead of forcing a static stream.
-    func playbackInfo(for item: MediaItem) async throws -> PlaybackInfoResponse {
-        guard let baseURL, let accessToken else {
-            throw APIError.server("Connect to Jellyfin before playing a movie.")
-        }
+    // MARK: - Playback
 
-        let url = baseURL.appendingPathComponent("Items/\(item.Id)/PlaybackInfo")
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(
-            "MediaBrowser Token=\"\(accessToken)\"",
-            forHTTPHeaderField: "Authorization"
-        )
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let profile: [String: Any] = [
+    /// Creates the device profile describing what AVPlayer can consume.
+    ///
+    /// We deliberately advertise HLS/TS output as our fallback.
+    /// This lets Jellyfin remux/transcode formats such as MKV rather
+    /// than sending the original MKV directly to AVPlayer.
+    private var deviceProfile: [String: Any] {
+        [
             "Name": "DiscShelf TV",
             "MaxStreamingBitrate": 120_000_000,
             "MaxStaticBitrate": 120_000_000,
-            "MusicStreamingTranscodingBitrate": 384_000,
+
             "DirectPlayProfiles": [
                 [
                     "Container": "mp4,m4v,mov",
@@ -195,13 +241,14 @@ final class JellyfinSession: ObservableObject {
                     "AudioCodec": "aac,ac3,eac3,mp3"
                 ]
             ],
+
             "TranscodingProfiles": [
                 [
                     "Container": "ts",
                     "Type": "Video",
                     "VideoCodec": "h264",
-                    "AudioCodec": "aac,ac3",
-                    "Protocol": "hls",
+                    "AudioCodec": "aac,ac3,eac3",
+                    "Protocol": "http",
                     "Context": "Streaming",
                     "MaxAudioChannels": "6",
                     "MinSegments": 1,
@@ -209,85 +256,253 @@ final class JellyfinSession: ObservableObject {
                     "EnableMpegtsM2TsMode": false
                 ]
             ],
+
             "CodecProfiles": [],
+
             "ResponseProfiles": [],
+
             "ContainerProfiles": [],
+
             "SubtitleProfiles": [
-                ["Format": "vtt", "Method": "External"],
-                ["Format": "srt", "Method": "External"]
+                [
+                    "Format": "vtt",
+                    "Method": "External"
+                ],
+                [
+                    "Format": "srt",
+                    "Method": "External"
+                ]
             ]
         ]
+    }
 
-        let body: [String: Any] = [
-            "DeviceProfile": profile,
-            "EnableDirectPlay": true,
-            "EnableDirectStream": true,
-            "EnableTranscoding": true
+    /// Asks Jellyfin how this particular movie should be played.
+    ///
+    /// If mediaSourceId is supplied, Jellyfin evaluates that exact
+    /// source rather than choosing from all available sources.
+    func playbackInfo(
+        for item: MediaItem,
+        mediaSourceId: String? = nil
+    ) async throws -> PlaybackInfoResponse {
+
+        guard let baseURL,
+              let accessToken else {
+            throw APIError.server(
+                "Connect to Jellyfin before playing a movie."
+            )
+        }
+
+        let url = baseURL.appendingPathComponent(
+            "Items/\(item.Id)/PlaybackInfo"
+        )
+
+        var components = URLComponents(
+            url: url,
+            resolvingAgainstBaseURL: false
+        )
+
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(
+                name: "UserId",
+                value: userID
+            ),
+            URLQueryItem(
+                name: "MaxStreamingBitrate",
+                value: "120000000"
+            ),
+            URLQueryItem(
+                name: "MaxStaticBitrate",
+                value: "120000000"
+            ),
+            URLQueryItem(
+                name: "EnableDirectPlay",
+                value: "true"
+            ),
+            URLQueryItem(
+                name: "EnableDirectStream",
+                value: "true"
+            ),
+            URLQueryItem(
+                name: "EnableTranscoding",
+                value: "true"
+            )
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        if let mediaSourceId {
+            queryItems.append(
+                URLQueryItem(
+                    name: "MediaSourceId",
+                    value: mediaSourceId
+                )
+            )
+        }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        components?.queryItems = queryItems
+
+        guard let finalURL = components?.url else {
+            throw APIError.server(
+                "Could not create the Jellyfin playback URL."
+            )
+        }
+
+        var request = URLRequest(url: finalURL)
+
+        request.httpMethod = "POST"
+
+        request.setValue(
+            "MediaBrowser Token=\"\(accessToken)\"",
+            forHTTPHeaderField: "Authorization"
+        )
+
+        request.setValue(
+            "application/json",
+            forHTTPHeaderField: "Content-Type"
+        )
+
+        request.setValue(
+            "application/json",
+            forHTTPHeaderField: "Accept"
+        )
+
+        let body: [String: Any] = [
+            "DeviceProfile": deviceProfile,
+            "EnableDirectPlay": true,
+            "EnableDirectStream": true,
+            "EnableTranscoding": true,
+            "MaxStreamingBitrate": 120_000_000,
+            "MaxStaticBitrate": 120_000_000
+        ]
+
+        request.httpBody = try JSONSerialization.data(
+            withJSONObject: body
+        )
+
+        let (data, response) =
+            try await URLSession.shared.data(for: request)
 
         guard let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode) else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+
+            let status =
+                (response as? HTTPURLResponse)?.statusCode ?? -1
+
             throw APIError.server(
                 "Jellyfin playback negotiation failed (HTTP \(status))."
             )
         }
 
-        return try JSONDecoder().decode(PlaybackInfoResponse.self, from: data)
-    }
+        let info = try JSONDecoder().decode(
+            PlaybackInfoResponse.self,
+            from: data
+        )
 
-    /// Builds a stream URL for a selected source.
-    /// A transcoding URL returned by Jellyfin takes precedence when present.
-    func playbackURL(
-        for item: MediaItem,
-        source: PlaybackMediaSource? = nil
-    ) async throws -> URL {
-        guard let baseURL, let accessToken else {
-            throw APIError.server("Connect to Jellyfin before playing a movie.")
-        }
-
-        let info = try await playbackInfo(for: item)
-
-        if let transcodingPath = source?.TranscodingUrl,
-           let transcodingURL = URL(
-                string: transcodingPath,
-                relativeTo: baseURL
-           ) {
-            return transcodingURL
-        }
-
-        if let selectedSource = source,
-           selectedSource.SupportsDirectPlay != true,
-           selectedSource.SupportsDirectStream != true {
+        if let errorCode = info.ErrorCode,
+           !errorCode.isEmpty {
             throw APIError.server(
-                "Jellyfin did not provide a usable direct stream or transcoding URL for this source."
+                "Jellyfin playback error: \(errorCode)"
             )
         }
 
-        if let sourcePath = info.MediaSources?.first?.TranscodingUrl,
-           let transcodingURL = URL(string: sourcePath, relativeTo: baseURL) {
-            return transcodingURL
+        guard let sources = info.MediaSources,
+              !sources.isEmpty else {
+            throw APIError.server(
+                "Jellyfin returned no playable media sources."
+            )
         }
 
-        var components = URLComponents(
-            url: baseURL.appendingPathComponent("Videos/\(item.Id)/stream"),
-            resolvingAgainstBaseURL: false
+        return info
+    }
+
+    /// Negotiates playback and returns the URL that AVPlayer should open.
+    ///
+    /// The important distinction here is:
+    ///
+    /// 1. Get the available source.
+    /// 2. Ask Jellyfin to evaluate that exact source.
+    /// 3. Use Jellyfin's TranscodingUrl if it requires conversion.
+    /// 4. Otherwise use the direct stream URL.
+    func playbackURL(for item: MediaItem) async throws -> URL {
+        guard let baseURL,
+              let accessToken else {
+            throw APIError.server(
+                "Connect to Jellyfin before playing a movie."
+            )
+        }
+
+        // First request lets Jellyfin tell us which media source exists.
+        let initialInfo = try await playbackInfo(for: item)
+
+        guard let source = initialInfo.MediaSources?.first else {
+            throw APIError.server(
+                "Jellyfin returned no media source for this movie."
+            )
+        }
+
+        // If Jellyfin has supplied a transcoding URL, use it.
+        //
+        // This is the path we expect for MKV and other content
+        // AVPlayer cannot natively consume.
+        if let transcodingPath = source.TranscodingUrl,
+           !transcodingPath.isEmpty {
+
+            guard let url = URL(
+                string: transcodingPath,
+                relativeTo: baseURL
+            ) else {
+                throw APIError.server(
+                    "Jellyfin returned an invalid transcoding URL."
+                )
+            }
+
+            return url
+        }
+
+        // Jellyfin considers the source directly playable.
+        if source.SupportsDirectPlay == true ||
+           source.SupportsDirectStream == true {
+
+            var components = URLComponents(
+                url: baseURL.appendingPathComponent(
+                    "Videos/\(item.Id)/stream"
+                ),
+                resolvingAgainstBaseURL: false
+            )
+
+            components?.queryItems = [
+                URLQueryItem(
+                    name: "Static",
+                    value: "true"
+                ),
+                URLQueryItem(
+                    name: "MediaSourceId",
+                    value: source.Id
+                ),
+                URLQueryItem(
+                    name: "api_key",
+                    value: accessToken
+                )
+            ]
+
+            guard let url = components?.url else {
+                throw APIError.server(
+                    "Could not create the direct playback URL."
+                )
+            }
+
+            return url
+        }
+
+        // Jellyfin did not give us a usable direct or transcoded URL.
+        throw APIError.server(
+            """
+            Jellyfin could not find a playback method for this movie.
+
+            Container: \(source.Container ?? "unknown")
+            Direct Play: \(source.SupportsDirectPlay == true)
+            Direct Stream: \(source.SupportsDirectStream == true)
+            Transcoding: \(source.SupportsTranscoding == true)
+            """
         )
-
-        components?.queryItems = [
-            URLQueryItem(name: "Static", value: "true"),
-            URLQueryItem(name: "api_key", value: accessToken)
-        ]
-
-        guard let streamURL = components?.url else {
-            throw APIError.server("Could not create a playback URL.")
-        }
-
-        return streamURL
     }
 }
 
