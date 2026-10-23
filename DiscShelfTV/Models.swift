@@ -1,4 +1,3 @@
-
 import Foundation
 
 struct JellyfinUser: Decodable {
@@ -26,17 +25,23 @@ struct MediaItem: Decodable, Identifiable, Hashable {
     let `Type`: String?
     let ImageTags: [String: String]?
 
-    var id: String { Id }
+    var id: String {
+        Id
+    }
 
     var displayTitle: String {
         if let year = ProductionYear {
             return "\(Name) (\(year))"
         }
+
         return Name
     }
 
     var runtimeText: String {
-        guard let ticks = RunTimeTicks else { return "" }
+        guard let ticks = RunTimeTicks else {
+            return ""
+        }
+
         let seconds = Double(ticks) / 10_000_000
         let hours = Int(seconds) / 3600
         let minutes = (Int(seconds) % 3600) / 60
@@ -44,9 +49,12 @@ struct MediaItem: Decodable, Identifiable, Hashable {
         if hours > 0 {
             return "\(hours)h \(minutes)m"
         }
+
         return "\(minutes)m"
     }
 }
+
+// MARK: - Jellyfin Playback
 
 struct PlaybackInfoResponse: Decodable {
     let MediaSources: [PlaybackMediaSource]?
@@ -56,9 +64,18 @@ struct PlaybackInfoResponse: Decodable {
 
 struct PlaybackMediaSource: Decodable {
     let Id: String?
+    let Name: String?
     let Container: String?
+    let Path: String?
+
     let SupportsDirectPlay: Bool?
     let SupportsDirectStream: Bool?
     let SupportsTranscoding: Bool?
+
     let TranscodingUrl: String?
+    let TranscodingContainer: String?
+    let TranscodingSubProtocol: String?
+
+    let DefaultAudioStreamIndex: Int?
+    let DefaultSubtitleStreamIndex: Int?
 }
