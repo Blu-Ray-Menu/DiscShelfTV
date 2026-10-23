@@ -4,22 +4,35 @@ import AVKit
 struct NativePlayerView: UIViewControllerRepresentable {
     let url: URL
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
+    func makeUIViewController(
+        context: Context
+    ) -> AVPlayerViewController {
+
         let controller = AVPlayerViewController()
-        let item = AVPlayerItem(url: url)
-        let player = AVPlayer(playerItem: item)
+
+        let playerItem = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: playerItem)
+
         controller.player = player
         controller.showsPlaybackControls = true
         controller.allowsPictureInPicturePlayback = false
+
         player.play()
+
         return controller
     }
 
-    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        // The player is intentionally not recreated during SwiftUI updates.
+    func updateUIViewController(
+        _ controller: AVPlayerViewController,
+        context: Context
+    ) {
+        // Do not recreate the player during SwiftUI updates.
     }
 
-    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: ()) {
+    static func dismantleUIViewController(
+        _ controller: AVPlayerViewController,
+        coordinator: ()
+    ) {
         controller.player?.pause()
         controller.player = nil
     }
