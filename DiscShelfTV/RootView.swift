@@ -290,5 +290,3 @@ struct MovieDetailView: View {
         }
     }
 }
-
-}
