@@ -23,6 +23,20 @@ jobs:
 
       - name: Generate Xcode project
         run: xcodegen generate
+        
+      - name: Package generated Xcode project
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            DiscShelfTV.xcodeproj \
+            DiscShelfTV-XcodeProject.zip
+
+      - name: Upload generated Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscShelfTV-XcodeProject
+          path: DiscShelfTV-XcodeProject.zip
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build for Apple TV Simulator
         run: |
