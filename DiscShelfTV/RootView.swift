@@ -187,15 +187,23 @@ struct MoviePoster: View {
 struct MovieDetailView: View {
     @EnvironmentObject private var session: JellyfinSession
     let movie: MediaItem
+
     @State private var showPlayer = false
+    @State private var isPreparingPlayback = false
+    @State private var playbackURL: URL?
+    @State private var playbackError: String?
 
     var body: some View {
         HStack(spacing: 48) {
             AsyncImage(url: session.imageURL(for: movie)) { image in
                 image.resizable().scaledToFit()
             } placeholder: {
-                RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.08))
-                    .overlay(Image(systemName: "film").font(.system(size: 60)))
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(0.08))
+                    .overlay {
+                        Image(systemName: "film")
+                            .font(.system(size: 60))
+                    }
             }
             .frame(width: 300, height: 450)
             .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -203,39 +211,84 @@ struct MovieDetailView: View {
             VStack(alignment: .leading, spacing: 22) {
                 Text(movie.displayTitle)
                     .font(.system(size: 38, weight: .bold, design: .rounded))
+
                 if !movie.runtimeText.isEmpty {
-                    Text(movie.runtimeText).foregroundStyle(.secondary)
+                    Text(movie.runtimeText)
+                        .foregroundStyle(.secondary)
                 }
+
                 if let overview = movie.Overview, !overview.isEmpty {
-                    Text(overview).font(.title3).lineLimit(7)
+                    Text(overview)
+                        .font(.title3)
+                        .lineLimit(7)
                 }
+
                 Button {
-                    showPlayer = true
+                    Task {
+                        await preparePlayback()
+                    }
                 } label: {
-                    Label("Play", systemImage: "play.fill")
-                        .frame(minWidth: 180)
+                    if isPreparingPlayback {
+                        ProgressView()
+                            .frame(minWidth: 180)
+                    } else {
+                        Label("Play", systemImage: "play.fill")
+                            .frame(minWidth: 180)
+                    }
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isPreparingPlayback)
 
-                Text("Direct playback is attempted. If this container or stream isn't supported by AVPlayer, this starter does not yet negotiate a Jellyfin transcode fallback.")
+                if let playbackError {
+                    Text(playbackError)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: 650, alignment: .leading)
+                }
+
+                Text("Playback is negotiated with Jellyfin before the player opens.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 650, alignment: .leading)
             }
+
             Spacer(minLength: 20)
         }
         .padding(60)
         .background(Color.black)
         .fullScreenCover(isPresented: $showPlayer) {
-            if let url = session.playbackURL(for: movie) {
-                NativePlayerView(url: url)
+            if let playbackURL {
+                NativePlayerView(url: playbackURL)
                     .ignoresSafeArea()
             } else {
-                VStack {
-                    Text("Could not create playback URL.")
-                    Button("Close") { showPlayer = false }
+                VStack(spacing: 20) {
+                    Text("No playback URL is available.")
+                    Button("Close") {
+                        showPlayer = false
+                    }
                 }
             }
         }
     }
+
+    @MainActor
+    private func preparePlayback() async {
+        isPreparingPlayback = true
+        playbackError = nil
+        playbackURL = nil
+
+        defer {
+            isPreparingPlayback = false
+        }
+
+        do {
+            let url = try await session.playbackURL(for: movie)
+            playbackURL = url
+            showPlayer = true
+        } catch {
+            playbackError = error.localizedDescription
+        }
+    }
+}
+
 }
