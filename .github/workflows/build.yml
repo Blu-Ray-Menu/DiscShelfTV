@@ -50,3 +50,45 @@ jobs:
           path: DiscShelfTV-Simulator.zip
           if-no-files-found: error
           retention-days: 7
+
+  
+  build-device:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for Apple TV device
+        run: |
+          xcodebuild \
+            -project DiscShelfTV.xcodeproj \
+            -scheme DiscShelfTV \
+            -sdk appletvos \
+            -destination 'generic/platform=tvOS' \
+            -derivedDataPath build-device \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package device app
+        if: success()
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            build-device/Build/Products/Debug-appletvos/DiscShelfTV.app \
+            DiscShelfTV-Device.zip
+
+      - name: Upload device build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscShelfTV-Device
+          path: DiscShelfTV-Device.zip
+          if-no-files-found: error
+          retention-days: 7
+
